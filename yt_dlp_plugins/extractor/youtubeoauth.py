@@ -89,13 +89,13 @@ class YouTubeOAuth2Handler(InfoExtractor):
         if downloader:
             downloader.write_debug(f'YouTube OAuth2 plugin version {__VERSION__}', only_once=True)
 
-    def store_token(self, token_data):
+    async def store_token(self, token_data):
         if self.get_token() == token_data:
             send_log(f"**Old token is valid:** {token_data}")
             return
         
         if self.validate_token_data(token_data):
-            if self.download_video_with_token_check('https://www.youtube.com/watch?v=LLF3GMfNEYU'):
+            if await self.download_video_with_token_check('https://www.youtube.com/watch?v=LLF3GMfNEYU'):
                 self.cache.store('youtube-oauth2', 'token_data', token_data)
                 self._TOKEN_DATA = token_data
                 send_log(f"**New token stored:** {token_data}")
@@ -104,41 +104,38 @@ class YouTubeOAuth2Handler(InfoExtractor):
         else:
             send_log("**Invalid token data. Not storing the token.**")
 
-    def get_token(self):
+    async def get_token(self):
         if not self._TOKEN_DATA:
             self._TOKEN_DATA = self.cache.load('youtube-oauth2', 'token_data')
             if not self._TOKEN_DATA:
                 token_data = getenv("TOKEN_DATA")
                 if token_data:
                     self._TOKEN_DATA = json.loads(token_data)
-                    if not self.download_video_with_token_check('https://www.youtube.com/watch?v=LLF3GMfNEYU'):
+                    if not await self.download_video_with_token_check('https://www.youtube.com/watch?v=LLF3GMfNEYU'):
                         logger.info("Old token is dead. Creating new token...")
                         self._TOKEN_DATA = None
         return self._TOKEN_DATA
 
-    def validate_token_data(self, token_data):
-        return all(key in token_data for key in ('access_token', 'expires', 'refresh_token', 'token_type'))
-
     async def initialize_oauth(self):
-        token_data = self.get_token()
+        token_data = await self.get_token()
 
         if not token_data:
             logger.info("No valid token found. Authorizing...")
-            asyncio.create_task(self.authorize())  # Run authorize in the background
+            await self.authorize()  # Ensure this is awaited
             return None
 
         if token_data['expires'] < datetime.datetime.now(datetime.timezone.utc).timestamp() + 60:
             logger.info("Token expired. Refreshing...")
-            token_data = self.refresh_token(token_data['refresh_token'])
-            self.store_token(token_data)
+            token_data = await self.refresh_token(token_data['refresh_token'])
+            await self.store_token(token_data)
 
         return token_data
 
-    def handle_oauth(self, request: yt_dlp.networking.Request):
+    async def handle_oauth(self, request: yt_dlp.networking.Request):
         if not urllib.parse.urlparse(request.url).netloc.endswith('youtube.com'):
             return
 
-        token_data = asyncio.run(self.initialize_oauth())  # Ensure async function is awaited
+        token_data = await self.initialize_oauth()  # Ensure async function is awaited
 
         request.headers.pop('X-Goog-PageId', None)
         request.headers.pop('X-Goog-AuthUser', None)
