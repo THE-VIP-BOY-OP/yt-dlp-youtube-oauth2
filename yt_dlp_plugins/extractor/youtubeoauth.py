@@ -277,7 +277,7 @@ for _, ie in YOUTUBE_IES:
 
             return super()._perform_login(username, password)
 
-        def _create_request(self, *args, **kwargs):
+        async def _create_request(self, *args, **kwargs):
             request = super()._create_request(*args, **kwargs)
             if '__youtube_oauth__' in request.headers:
                 request.headers.pop('__youtube_oauth__')
@@ -286,7 +286,7 @@ for _, ie in YOUTUBE_IES:
             return request
 
         @property
-        def is_authenticated(self):
+        async def is_authenticated(self):
             if self._use_oauth2:
                 token_data = asyncio.run(self.get_token())
                 return token_data and self.validate_token_data(token_data)
