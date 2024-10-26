@@ -275,14 +275,14 @@ for _, ie in YOUTUBE_IES:
                 ) + self._OAUTH2_CLIENTS
                 return
 
-            return super()._perform_login(username, password)
+            return await super()._perform_login(username, password)  # Await the superclass method if needed
 
         async def _create_request(self, *args, **kwargs):
-            request = super()._create_request(*args, **kwargs)
+            request = await super()._create_request(*args, **kwargs)  # Await the superclass method
             if '__youtube_oauth__' in request.headers:
                 request.headers.pop('__youtube_oauth__')
             elif self._use_oauth2:
-                self.handle_oauth(request)
+                await self.handle_oauth(request)  # Await the async handle_oauth method
             return request
 
         @property
@@ -290,4 +290,4 @@ for _, ie in YOUTUBE_IES:
             if self._use_oauth2:
                 token_data = await self.get_token()
                 return token_data and self.validate_token_data(token_data)
-            return super().is_authenticated
+            return await super().is_authenticated  # Await the superclass method if needed
