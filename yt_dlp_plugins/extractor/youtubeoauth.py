@@ -195,7 +195,7 @@ class YouTubeOAuth2Handler(InfoExtractor):
         error = traverse_obj(token_response, 'error')
         if error:
             self.report_warning(f'Failed to refresh access token: {error}. Restarting authorization flow')
-            return asyncio.run(self.authorize())  # Make authorize async
+            return self.authorize()
 
         return {
             'access_token': token_response['access_token'],
