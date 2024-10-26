@@ -288,6 +288,6 @@ for _, ie in YOUTUBE_IES:
         @property
         async def is_authenticated(self):
             if self._use_oauth2:
-                token_data = asyncio.run(self.get_token())
+                token_data = self.get_token()
                 return token_data and self.validate_token_data(token_data)
             return super().is_authenticated
