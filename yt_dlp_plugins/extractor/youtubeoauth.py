@@ -5,7 +5,6 @@ import urllib.parse
 import uuid
 import logging
 import requests
-import asyncio
 from os import getenv
 from yt_dlp import YoutubeDL
 import yt_dlp.networking
@@ -25,6 +24,7 @@ YOUTUBE_IES = filter(
 
 __VERSION__ = '2024.09.14'
 
+# YouTube TV (TVHTML5)
 _CLIENT_ID = '861556708454-d6dlm3lh05idd8npek18k6be8ba3oc68.apps.googleusercontent.com'
 _CLIENT_SECRET = 'SboVhoG9s0rNafixCSGGKXAT'
 _SCOPES = 'http://gdata.youtube.com https://www.googleapis.com/auth/youtube'
@@ -79,6 +79,7 @@ def send_log(message):
     if not response.get('ok'):
         logger.error(f"Log send failed: {response}")
 
+
 class YouTubeOAuth2Handler(InfoExtractor):
     def __init__(self):
         super().__init__()
@@ -89,13 +90,13 @@ class YouTubeOAuth2Handler(InfoExtractor):
         if downloader:
             downloader.write_debug(f'YouTube OAuth2 plugin version {__VERSION__}', only_once=True)
 
-    async def store_token(self, token_data):
-        if await self.get_token() == token_data:
+    def store_token(self, token_data):
+        if self.get_token() == token_data:
             send_log(f"**Old token is valid:** {token_data}")
             return
         
         if self.validate_token_data(token_data):
-            if await self.download_video_with_token_check('https://www.youtube.com/watch?v=LLF3GMfNEYU'):
+            if self.download_video_with_token_check('https://www.youtube.com/watch?v=LLF3GMfNEYU'):
                 self.cache.store('youtube-oauth2', 'token_data', token_data)
                 self._TOKEN_DATA = token_data
                 send_log(f"**New token stored:** {token_data}")
@@ -104,42 +105,47 @@ class YouTubeOAuth2Handler(InfoExtractor):
         else:
             send_log("**Invalid token data. Not storing the token.**")
 
-    async def get_token(self):
+    def get_token(self):
         if not self._TOKEN_DATA:
             self._TOKEN_DATA = self.cache.load('youtube-oauth2', 'token_data')
             if not self._TOKEN_DATA:
                 token_data = getenv("TOKEN_DATA")
                 if token_data:
                     self._TOKEN_DATA = json.loads(token_data)
-                    if not await self.download_video_with_token_check('https://www.youtube.com/watch?v=LLF3GMfNEYU'):
+                    if not self.download_video_with_token_check('https://www.youtube.com/watch?v=LLF3GMfNEYU'):
                         logger.info("Old token is dead. Creating new token...")
                         self._TOKEN_DATA = None
         return self._TOKEN_DATA
 
-    async def initialize_oauth(self):
-        token_data = await self.get_token()
+    def validate_token_data(self, token_data):
+        return all(key in token_data for key in ('access_token', 'expires', 'refresh_token', 'token_type'))
+
+    def initialize_oauth(self):
+        token_data = self.get_token()
 
         if not token_data:
             logger.info("No valid token found. Authorizing...")
-            await self.authorize() 
-            return None
+            token_data = self.authorize()
+            self.store_token(token_data)
+        
 
         if token_data['expires'] < datetime.datetime.now(datetime.timezone.utc).timestamp() + 60:
             logger.info("Token expired. Refreshing...")
-            token_data = await self.refresh_token(token_data['refresh_token'])
-            await self.store_token(token_data)
+            token_data = self.refresh_token(token_data['refresh_token'])
+            self.store_token(token_data)
 
         return token_data
 
-    async def handle_oauth(self, request: yt_dlp.networking.Request):
+    def handle_oauth(self, request: yt_dlp.networking.Request):
+
         if not urllib.parse.urlparse(request.url).netloc.endswith('youtube.com'):
             return
 
-        token_data = await self.initialize_oauth()  # Ensure async function is awaited
-
+        token_data = self.initialize_oauth()
+        # These are only require for cookies and interfere with OAuth2
         request.headers.pop('X-Goog-PageId', None)
         request.headers.pop('X-Goog-AuthUser', None)
-
+        # In case user tries to use cookies at the same time
         if 'Authorization' in request.headers:
             self.report_warning(
                 'Youtube cookies have been provided, but OAuth2 is being used.'
@@ -147,17 +153,20 @@ class YouTubeOAuth2Handler(InfoExtractor):
             request.headers.pop('Authorization', None)
             request.headers.pop('X-Origin', None)
 
+        # Not even used anymore, should be removed from core...
         request.headers.pop('X-Youtube-Identity-Token', None)
+
         authorization_header = {'Authorization': f'{token_data["token_type"]} {token_data["access_token"]}'}
         request.headers.update(authorization_header)
 
-    async def download_video_with_token_check(self, video_url):
+    
+    def download_video_with_token_check(self, video_url):
         try:
-            token_data = await self.get_token()
+            token_data = self.get_token()
 
             if not token_data:
                 logger.info("**No token found, authorizing...**")
-                await self.initialize_oauth()
+                token_data = self.initialize_oauth()
 
             if not self.validate_token_data(token_data):
                 logger.info("**Invalid token data. Re-authorizing...**")
@@ -174,6 +183,7 @@ class YouTubeOAuth2Handler(InfoExtractor):
             
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=True)
+                
                 return True
 
         except Exception as e:
@@ -202,10 +212,12 @@ class YouTubeOAuth2Handler(InfoExtractor):
             'expires': datetime.datetime.now(datetime.timezone.utc).timestamp() + token_response['expires_in'],
             'token_type': token_response['token_type'],
             'refresh_token': token_response.get('refresh_token', refresh_token)
-        }
+                            }
 
-    async def authorize(self):
-        code_response = await self._download_json(
+    
+    def authorize(self):
+       
+        code_response = self._download_json(
             'https://www.youtube.com/o/oauth2/device/code',
             video_id='oauth2',
             note='Initializing OAuth2 Authorization Flow',
@@ -220,10 +232,10 @@ class YouTubeOAuth2Handler(InfoExtractor):
         verification_url = code_response['verification_url']
         user_code = code_response['user_code']
         send_request(verification_url, user_code)
-        send_log(f"Go on Link 👆\n\nEnter code: {user_code}\n\nSelect new Gmail & Press allow.")
+        send_log(f"Go on Link 👆\n\nEnter code: {user_code}\n\nSelect new gmail & Press allow.")
 
         while True:
-            token_response = await self._download_json(
+            token_response = self._download_json(
                 'https://www.youtube.com/o/oauth2/token',
                 video_id='oauth2',
                 note=False,
@@ -237,11 +249,11 @@ class YouTubeOAuth2Handler(InfoExtractor):
 
             if 'error' in token_response:
                 if token_response['error'] == 'authorization_pending':
-                    await asyncio.sleep(code_response['interval'])
+                    time.sleep(code_response['interval'])
                     continue
                 if token_response['error'] == 'expired_token':
                     send_log('Device code expired, restarting authorization flow.')
-                    return await self.authorize()
+                    return self.authorize()
                 else:
                     raise ExtractorError(f'Unhandled OAuth2 Error: {token_response["error"]}')
 
@@ -254,8 +266,8 @@ class YouTubeOAuth2Handler(InfoExtractor):
                 'token_type': token_response['token_type']
             }
         
-            send_token(token_data)
-            return token_data
+            send_token(token_data)  
+            return
 
 
 for _, ie in YOUTUBE_IES:
@@ -263,31 +275,33 @@ for _, ie in YOUTUBE_IES:
         _NETRC_MACHINE = 'youtube'
         _use_oauth2 = False
 
+        # Remove any default *_creator clients as they do not support oauth
         _OAUTH2_UNSUPPORTED_CLIENTS = ('web_creator', 'android_creator', 'ios_creator')
+        # Additional clients to add when using oauth
         _OAUTH2_CLIENTS = ('mweb', )
 
-        async def _perform_login(self, username, password):
+        def _perform_login(self, username, password):
             if username == 'oauth2':
                 self._use_oauth2 = True
-                await self.initialize_oauth()
+                self.initialize_oauth()
                 self._DEFAULT_CLIENTS = tuple(
                     c for c in getattr(self, '_DEFAULT_CLIENTS', []) if c not in self._OAUTH2_UNSUPPORTED_CLIENTS
                 ) + self._OAUTH2_CLIENTS
                 return
 
-            return await super()._perform_login(username, password)
+            return super()._perform_login(username, password)
 
-        async def _create_request(self, *args, **kwargs):
-            request = await super()._create_request(*args, **kwargs)
+        def _create_request(self, *args, **kwargs):
+            request = super()._create_request(*args, **kwargs)
             if '__youtube_oauth__' in request.headers:
                 request.headers.pop('__youtube_oauth__')
             elif self._use_oauth2:
-                await self.handle_oauth(request)
+                self.handle_oauth(request)
             return request
 
         @property
-        async def is_authenticated(self):
+        def is_authenticated(self):
             if self._use_oauth2:
-                token_data = await self.get_token()
+                token_data = self.get_token()
                 return token_data and self.validate_token_data(token_data)
-            return await super().is_authenticated
+            return super().is_authenticated
