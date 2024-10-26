@@ -269,7 +269,7 @@ for _, ie in YOUTUBE_IES:
         def _perform_login(self, username, password):
             if username == 'oauth2':
                 self._use_oauth2 = True
-                await self.initialize_oauth()
+                self.initialize_oauth()
                 self._DEFAULT_CLIENTS = tuple(
                     c for c in getattr(self, '_DEFAULT_CLIENTS', []) if c not in self._OAUTH2_UNSUPPORTED_CLIENTS
                 ) + self._OAUTH2_CLIENTS
@@ -282,7 +282,7 @@ for _, ie in YOUTUBE_IES:
             if '__youtube_oauth__' in request.headers:
                 request.headers.pop('__youtube_oauth__')
             elif self._use_oauth2:
-                await self.handle_oauth(request)
+                self.handle_oauth(request)
             return request
 
         @property
