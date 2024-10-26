@@ -266,7 +266,7 @@ for _, ie in YOUTUBE_IES:
         _OAUTH2_UNSUPPORTED_CLIENTS = ('web_creator', 'android_creator', 'ios_creator')
         _OAUTH2_CLIENTS = ('mweb', )
 
-        def _perform_login(self, username, password):
+        async def _perform_login(self, username, password):
             if username == 'oauth2':
                 self._use_oauth2 = True
                 self.initialize_oauth()
