@@ -121,7 +121,7 @@ class YouTubeOAuth2Handler(InfoExtractor):
 
         if not token_data:
             logger.info("No valid token found. Authorizing...")
-            self.authorize() 
+            await self.authorize() 
             return None
 
         if token_data['expires'] < datetime.datetime.now(datetime.timezone.utc).timestamp() + 60:
