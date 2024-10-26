@@ -90,7 +90,7 @@ class YouTubeOAuth2Handler(InfoExtractor):
             downloader.write_debug(f'YouTube OAuth2 plugin version {__VERSION__}', only_once=True)
 
     async def store_token(self, token_data):
-        if self.get_token() == token_data:
+        if await self.get_token() == token_data:
             send_log(f"**Old token is valid:** {token_data}")
             return
         
