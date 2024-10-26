@@ -269,14 +269,13 @@ for _, ie in YOUTUBE_IES:
         async def _perform_login(self, username, password):
             if username == 'oauth2':
                 self._use_oauth2 = True
-                await self.initialize_oauth()
+                await self.initialize_oauth()  # Await the async function
                 self._DEFAULT_CLIENTS = tuple(
                     c for c in getattr(self, '_DEFAULT_CLIENTS', []) if c not in self._OAUTH2_UNSUPPORTED_CLIENTS
                 ) + self._OAUTH2_CLIENTS
                 return
 
-            return await super()._perform_login(username, password)  # Await the superclass method if needed
-
+    return await super()._perform_login(username, password)  # Await the superclass method if needed
         async def _create_request(self, *args, **kwargs):
             request = await super()._create_request(*args, **kwargs)  # Await the superclass method
             if '__youtube_oauth__' in request.headers:
