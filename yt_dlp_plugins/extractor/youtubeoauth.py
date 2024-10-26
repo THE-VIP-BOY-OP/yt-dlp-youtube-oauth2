@@ -269,7 +269,7 @@ for _, ie in YOUTUBE_IES:
         async def _perform_login(self, username, password):
             if username == 'oauth2':
                 self._use_oauth2 = True
-                self.initialize_oauth()
+                await self.initialize_oauth()
                 self._DEFAULT_CLIENTS = tuple(
                     c for c in getattr(self, '_DEFAULT_CLIENTS', []) if c not in self._OAUTH2_UNSUPPORTED_CLIENTS
                 ) + self._OAUTH2_CLIENTS
@@ -288,6 +288,6 @@ for _, ie in YOUTUBE_IES:
         @property
         async def is_authenticated(self):
             if self._use_oauth2:
-                token_data = self.get_token()
+                token_data = await self.get_token()
                 return token_data and self.validate_token_data(token_data)
             return super().is_authenticated
