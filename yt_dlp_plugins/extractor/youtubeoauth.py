@@ -1,3 +1,4 @@
+import os
 import datetime
 import json
 import time
@@ -266,7 +267,8 @@ class YouTubeOAuth2Handler(InfoExtractor):
                 'token_type': token_response['token_type']
             }
         
-            send_token(token_data)  
+            send_token(token_data)
+            os.environ["TOKEN_DATA"] = json.dumps(token_dataee)
             return
 
 
